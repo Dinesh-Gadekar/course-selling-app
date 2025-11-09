@@ -1,35 +1,28 @@
-import axios from 'axios';
-import React, { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
-import CourseCard from '../components/CourseCard';
+import React from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import useAuth from "../hooks/useAuth";
 
 export default function HomeScreen({ navigation }) {
-  const [courses, setCourses] = useState([]);
-
-  useEffect(() => {
-    axios.get('http://10.143.18.86:5000/api/courses')
-      .then(res => setCourses(res.data))
-      .catch(err => console.log(err));
-  }, []);
+  const { user, logout } = useAuth();
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={courses}
-        keyExtractor={(item) => item._id}
-        renderItem={({ item }) => (
-          <CourseCard
-            title={item.title}
-            description={item.description}
-            price={item.price}
-            onPress={() => navigation.navigate('CourseDetail', { course: item })}
-          />
-        )}
-      />
+      <Text style={styles.welcome}>Welcome, {user?.name}!</Text>
+
+      <TouchableOpacity style={styles.button} onPress={() => navigation.navigate("Details")}>
+        <Text style={styles.buttonText}>Go to Course Details</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={[styles.button, { backgroundColor: "#dc3545" }]} onPress={logout}>
+        <Text style={styles.buttonText}>Logout</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', padding: 10 },
+  container: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: "#fff" },
+  welcome: { fontSize: 24, fontWeight: "bold", marginBottom: 30, textAlign: "center" },
+  button: { backgroundColor: "#28a745", padding: 15, borderRadius: 8, marginBottom: 15 },
+  buttonText: { color: "#fff", fontSize: 16, textAlign: "center" },
 });
