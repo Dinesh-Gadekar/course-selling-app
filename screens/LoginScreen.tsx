@@ -1,44 +1,84 @@
-import React, { useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import useAuth from "../hooks/useAuth";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useAuth } from "../hooks/useAuth"; // ✅ import AuthContext hook
 
 export default function LoginScreen({ navigation }) {
+  const { login, token, user, loading } = useAuth(); // ✅ use global login
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { login, loginLoading } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !password) return Alert.alert("Error", "Please fill all fields");
-
-    const res = await login(email, password);
-    if (!res.success) return Alert.alert("Error", res.message);
-
-    if (res.user?.isAdmin) {
-      navigation.replace("AdminHome");
-    } else {
-      navigation.replace("UserHome");
+    if (!email || !password) {
+      Alert.alert("Error", "Please fill all fields");
+      return;
     }
+
+    setSubmitting(true);
+    console.log("🔐 Sending login request...");
+
+    await login(email, password); // ✅ use AuthContext login()
+
+    setSubmitting(false);
   };
+
+  // ✅ Watch for token update and navigate only when ready
+  useEffect(() => {
+    if (token && user) {
+      console.log("✅ Logged in as:", user.role);
+
+      if (user.role === "admin") {
+        navigation.replace("AdminDashboard");
+      } else {
+        navigation.replace("StudentDashboard");
+      }
+    }
+  }, [token, user]);
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Login</Text>
-      <TextInput placeholder="Email" value={email} onChangeText={setEmail} style={styles.input} />
-      <TextInput placeholder="Password" value={password} onChangeText={setPassword} style={styles.input} secureTextEntry />
 
-      {loginLoading ? (
-        <View style={styles.loading}>
-          <ActivityIndicator size="large" color="#0000ff" />
-          <Text style={{ marginTop: 10 }}>Logging in...</Text>
-        </View>
-      ) : (
-        <TouchableOpacity style={styles.button} onPress={handleLogin}>
+      <TextInput
+        placeholder="Email"
+        style={styles.input}
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+      />
+
+      <TextInput
+        placeholder="Password"
+        style={styles.input}
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+      />
+
+      <TouchableOpacity
+        style={[styles.button, submitting && styles.disabledButton]}
+        onPress={handleLogin}
+        disabled={submitting || loading}
+      >
+        {submitting || loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
           <Text style={styles.buttonText}>Login</Text>
-        </TouchableOpacity>
-      )}
+        )}
+      </TouchableOpacity>
 
       <TouchableOpacity onPress={() => navigation.navigate("Register")}>
-        <Text style={styles.link}>Don't have an account? Register</Text>
+        <Text style={styles.registerText}>
+          Don’t have an account? Register
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -46,10 +86,21 @@ export default function LoginScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", padding: 20 },
-  title: { fontSize: 28, fontWeight: "bold", marginBottom: 20, textAlign: "center" },
-  input: { borderWidth: 1, borderColor: "#ccc", padding: 12, marginBottom: 15, borderRadius: 8 },
-  button: { backgroundColor: "#28a745", padding: 15, borderRadius: 8 },
-  buttonText: { color: "#fff", textAlign: "center", fontSize: 16 },
-  link: { textAlign: "center", marginTop: 15, color: "#007bff" },
-  loading: { justifyContent: "center", alignItems: "center", marginVertical: 10 },
+  title: { fontSize: 24, fontWeight: "bold", textAlign: "center", marginBottom: 20 },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+  button: {
+    backgroundColor: "#007bff",
+    padding: 14,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  disabledButton: { backgroundColor: "#7aa7e0" },
+  buttonText: { color: "#fff", fontWeight: "bold" },
+  registerText: { textAlign: "center", marginTop: 16, color: "#007bff" },
 });

@@ -1,47 +1,98 @@
-import React, { useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import useAuth from "../hooks/useAuth";
+import React, { useEffect, useState } from "react";
+import { Button, StyleSheet, Text, TextInput, View } from "react-native";
+import { useAuth } from "../hooks/useAuth";
 
 export default function RegisterScreen({ navigation }) {
-  const { register } = useAuth();
+  const { register, message, setMessage } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [btnLoading, setBtnLoading] = useState(false);
+  const [course, setCourse] = useState("");
 
-  const handleRegister = async () => {
-    if (!name || !email || !password) return Alert.alert("Error", "Please fill all fields");
-
-    setBtnLoading(true);
-    const res = await register(name, email, password);
-    setBtnLoading(false);
-
-    if (!res.success) return Alert.alert("Error", res.message);
-
-    navigation.replace("UserHome");
+  const handleRegister = () => {
+    setMessage({ text: "", type: "" });
+    register(name, email, password, course);
   };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMessage({ text: "", type: "" });
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [message]);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Register</Text>
-      <TextInput placeholder="Name" value={name} onChangeText={setName} style={styles.input} />
-      <TextInput placeholder="Email" value={email} onChangeText={setEmail} style={styles.input} />
-      <TextInput placeholder="Password" value={password} onChangeText={setPassword} style={styles.input} secureTextEntry />
-      <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={btnLoading}>
-        {btnLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Register</Text>}
-      </TouchableOpacity>
-      <TouchableOpacity onPress={() => navigation.navigate("Login")}>
-        <Text style={styles.link}>Already have an account? Login</Text>
-      </TouchableOpacity>
+      <Text style={styles.title}>Student Registration</Text>
+
+      {message.text ? (
+        <Text
+          style={[
+            styles.alert,
+            message.type === "error" ? styles.error : styles.success,
+          ]}
+        >
+          {message.text}
+        </Text>
+      ) : null}
+
+      <TextInput
+        style={styles.input}
+        placeholder="Full Name"
+        value={name}
+        onChangeText={setName}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Email Address"
+        keyboardType="email-address"
+        value={email}
+        onChangeText={setEmail}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Password"
+        secureTextEntry
+        value={password}
+        onChangeText={setPassword}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Course Name"
+        value={course}
+        onChangeText={setCourse}
+      />
+
+      <Button title="Register" onPress={handleRegister} color="#1E88E5" />
+
+      <Text
+        style={styles.link}
+        onPress={() => navigation.navigate("Login")}
+      >
+        Already have an account? Login
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 20 },
-  title: { fontSize: 28, fontWeight: "bold", marginBottom: 20, textAlign: "center" },
-  input: { borderWidth: 1, borderColor: "#ccc", padding: 12, marginBottom: 15, borderRadius: 8 },
-  button: { backgroundColor: "#007bff", padding: 15, borderRadius: 8 },
-  buttonText: { color: "#fff", textAlign: "center", fontSize: 16 },
-  link: { textAlign: "center", marginTop: 15, color: "#28a745" },
+  container: { flex: 1, padding: 20, justifyContent: "center" },
+  title: { fontSize: 22, marginBottom: 20, textAlign: "center", fontWeight: "bold" },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    padding: 10,
+    marginBottom: 15,
+    borderRadius: 6,
+  },
+  alert: {
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 15,
+    textAlign: "center",
+    fontWeight: "bold",
+  },
+  error: { backgroundColor: "#ffdddd", color: "#d32f2f" },
+  success: { backgroundColor: "#ddffdd", color: "#388e3c" },
+  link: { color: "#1E88E5", marginTop: 15, textAlign: "center" },
 });

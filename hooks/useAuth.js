@@ -1,76 +1,84 @@
+// hooks/useAuth.js
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import React, { createContext, useContext, useEffect, useState } from "react";
-
-// Replace with your PC's LAN IP (same Wi-Fi as your phone)
-const API_URL = "http://10.143.18.86:5000/api";
+import { navigationRef } from "../navigation/RootNavigation"; // we'll add this next
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);       // check stored user
-  const [loginLoading, setLoginLoading] = useState(false); // login API call
+  const [token, setToken] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const API_URL = "http://10.31.149.86:5720/api";
 
-  // Load user from AsyncStorage on app start
   useEffect(() => {
-    const loadUser = async () => {
+    const loadAuth = async () => {
       try {
+        const savedToken = await AsyncStorage.getItem("token");
         const savedUser = await AsyncStorage.getItem("user");
-        if (savedUser) setUser(JSON.parse(savedUser));
+        if (savedToken && savedUser) {
+          setToken(savedToken);
+          setUser(JSON.parse(savedUser));
+          console.log("🔑 Token loaded from storage");
+        } else {
+          console.log("⚠️ No token found");
+        }
       } catch (err) {
-        console.log("Error loading user:", err);
+        console.log("Error loading auth:", err);
       } finally {
         setLoading(false);
       }
     };
-    loadUser();
+    loadAuth();
   }, []);
 
   const login = async (email, password) => {
-    setLoginLoading(true);
     try {
       const res = await axios.post(`${API_URL}/auth/login`, { email, password });
-      setUser(res.data);
-await AsyncStorage.setItem("user", JSON.stringify(res.data));
+      if (res.data.success) {
+        await AsyncStorage.setItem("token", res.data.token);
+        await AsyncStorage.setItem("user", JSON.stringify(res.data.user));
+        setToken(res.data.token);
+        setUser(res.data.user);
+        console.log("✅ Logged in as:", res.data.user.role);
+        console.log("✅ Token saved:", res.data.token);
 
-      return { success: true, user: res.data.user };
-    } catch (error) {
-      console.log("Login error:", error.response?.data || error.message);
-      return { success: false, message: error.response?.data?.message || "Login failed" };
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  const register = async (name, email, password, isAdmin = false) => {
-    setLoginLoading(true);
-    try {
-      const res = await axios.post(`${API_URL}/auth/register`, { name, email, password, isAdmin });
-setUser(res.data);
-await AsyncStorage.setItem("user", JSON.stringify(res.data));
-
-      return { success: true, user: res.data.user };
-    } catch (error) {
-      console.log("Register error:", error.response?.data || error.message);
-      return { success: false, message: error.response?.data?.message || "Registration failed" };
-    } finally {
-      setLoginLoading(false);
+        // navigate after login
+        if (res.data.user.role === "admin") {
+          navigationRef.current?.navigate("AdminDashboard");
+        } else {
+          navigationRef.current?.navigate("StudentDashboard");
+        }
+      }
+    } catch (err) {
+      console.log("❌ Login error:", err.response?.data || err.message);
     }
   };
 
   const logout = async () => {
-    setUser(null);
-    await AsyncStorage.removeItem("user");
+    try {
+      await AsyncStorage.removeItem("token");
+      await AsyncStorage.removeItem("user");
+      setToken(null);
+      setUser(null);
+      console.log("🚪 Logged out");
+
+      // Redirect to Login screen
+      navigationRef.current?.reset({
+        index: 0,
+        routes: [{ name: "Login" }],
+      });
+    } catch (error) {
+      console.log("❌ Logout error:", error);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, loginLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export default function useAuth() {
-  return useContext(AuthContext);
-}
+export const useAuth = () => useContext(AuthContext);
