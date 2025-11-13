@@ -1,27 +1,39 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
-import { createServer } from "http";
+import http from "http";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import { Server } from "socket.io";
 
-import Chat from "./models/Chat.js"; // ✅ Make sure Chat model is imported
+import Chat from "./models/Chat.js";
+import User from "./models/User.js"; // ✅ Make sure you have User model imported
 import authRoutes from "./routes/authRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import fileRoutes from "./routes/fileRoutes.js";
 
 dotenv.config();
+
 const app = express();
+const server = http.createServer(app); // ✅ Required for Socket.IO
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
 
 // ✅ Middlewares
 app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static("uploads"));
 
-// ✅ Connect MongoDB
+// ✅ MongoDB connection (only once)
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(process.env.MONGO_URI || "mongodb://localhost:27017/courseSelling", {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
@@ -34,17 +46,9 @@ app.get("/", (req, res) => {
   res.send("Server is running ✅");
 });
 
-// ✅ HTTP + Socket.IO setup
-const server = createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "*", // ⚠️ You can restrict this to your frontend URL later
-    methods: ["GET", "POST"],
-  },
-});
 
-// ✅ Middleware to verify token in socket handshake
-io.use((socket, next) => {
+// ✅ Socket.IO Authentication
+io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) {
     console.warn("⚠️ No token provided in socket handshake");
@@ -52,55 +56,53 @@ io.use((socket, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    socket.user = decoded;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "secretkey");
+    const user = await User.findById(decoded.id).select("name email");
+    if (!user) return next(new Error("User not found"));
+    socket.user = user;
     next();
   } catch (err) {
-    console.error("❌ Invalid socket token:", err.message);
-    next(new Error("Authentication error"));
+    console.error("❌ Invalid token in socket:", err.message);
+    next(new Error("Authentication failed"));
   }
 });
 
-// ✅ Handle Socket.IO connections
+// ✅ Socket.IO Events
 io.on("connection", (socket) => {
-  console.log("🟢 User connected:", socket.id);
+  console.log("🟢 User connected:", socket.user?.name || socket.id);
 
-  socket.on("disconnect", () => {
-    console.log("🔴 User disconnected:", socket.id);
-  });
-
-  // ✅ Handle sending messages
   socket.on("sendMessage", async (data, callback) => {
     try {
-      const { senderId, receiverId, message } = data;
-
-      if (!senderId || !message) {
-        console.warn("⚠️ Missing senderId or message in sendMessage");
-        return callback?.({ error: "Missing senderId or message" });
+      if (!socket.user) {
+        console.warn("⚠️ Unauthorized message attempt");
+        return callback({ error: "Unauthorized" });
       }
 
-      // ✅ Save message to DB
-      const chatMessage = await Chat.create({
-        sender: senderId,
-        receiver: receiverId,
+      const { message } = data;
+      if (!message) return callback({ error: "Message content missing" });
+
+      // ✅ Save chat to DB
+      let newChat = await Chat.create({
+        sender: socket.user._id,
         message,
       });
 
-      // ✅ Broadcast to everyone (or targeted users)
-      io.emit("receiveMessage", {
-        senderId,
-        receiverId,
-        message,
-        createdAt: chatMessage.createdAt,
-      });
+      // ✅ Populate sender before emitting
+      newChat = await newChat.populate("sender", "name email");
 
-      callback?.({ success: true });
+      io.emit("receiveMessage", newChat);
+      callback({ success: true });
     } catch (err) {
       console.error("❌ Error saving message:", err);
-      callback?.({ error: err.message });
+      callback({ error: "Server error" });
     }
+  });
+
+  socket.on("disconnect", () => {
+    console.log("🔴 User disconnected:", socket.user?.name || socket.id);
   });
 });
 
+// ✅ Start Server
 const PORT = process.env.PORT || 5720;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

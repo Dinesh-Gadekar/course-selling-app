@@ -22,11 +22,15 @@ router.post("/", authMiddleware, async (req, res) => {
     const { message } = req.body;
     const sender = req.user.id;
     if (!message) return res.status(400).json({ error: "Message is required" });
-    const chat = await Chat.create({ sender, message });
+
+    let chat = await Chat.create({ sender, message });
+    chat = await chat.populate("sender", "name email"); // 👈 populate sender details
+
     res.status(201).json(chat);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 export default router;
